@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Last Frame Extractor</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            color: #1c1e21;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px 0;
+        }
+        .container {
+            background-color: white;
+            padding: 30px 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+        }
+        h1 {
+            color: #0b57d0;
+            margin-bottom: 20px;
+        }
+        p {
+            color: #606770;
+            margin-bottom: 25px;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .file-label {
+            background-color: #e7f3ff;
+            color: #0b57d0;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            display: inline-block;
+            margin-bottom: 15px;
+            transition: background-color 0.2s;
+        }
+        .file-label:hover {
+            background-color: #d0e6ff;
+        }
+        #fileName {
+            font-style: italic;
+            color: #606770;
+            margin-bottom: 20px;
+            min-height: 20px;
+        }
+        #extractButton {
+            background-color: #0b57d0;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s, opacity 0.2s;
+            opacity: 0.5;
+            pointer-events: none;
+        }
+        #extractButton.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        #extractButton:hover.active {
+            background-color: #0a4cb5;
+        }
+        .result {
+            margin-top: 25px;
+            border-top: 1px solid #ddd;
+            padding-top: 20px;
+        }
+        #previewImage {
+            max-width: 100%;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            margin-bottom: 10px;
+        }
+        #resolutionDisplay {
+            font-size: 0.9em;
+            color: #606770;
+            margin-bottom: 15px;
+        }
+        .actions a {
+            display: inline-block;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+            transition: background-color 0.2s;
+            margin: 5px;
+        }
+        #downloadLink {
+            background-color: #34a853;
+        }
+        #downloadLink:hover {
+            background-color: #2c8f45;
+        }
+        #resetButton {
+            background-color: #6c757d;
+        }
+        #resetButton:hover {
+            background-color: #5a6268;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Last Frame Extractor</h1>
+        <p>Select a video file to extract its final frame. The entire process runs in your browser; your files never leave your computer!</p>
+
+        <label for="videoInput" class="file-label">Select Video</label>
+        <input type="file" id="videoInput" accept="video/*">
+        <div id="fileName">No file selected</div>
+
+        <button id="extractButton">Extract Frame</button>
+
+        <div class="result" id="resultContainer" style="display: none;">
+            <h2>Result</h2>
+            <img id="previewImage" src="" alt="Last frame of the video">
+            <div id="resolutionDisplay"></div>
+            <div class="actions">
+                <a id="downloadLink" href="#" download="last_frame.png">Download Image (PNG)</a>
+                <a id="resetButton" href="#">Process Another Video</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden elements for processing -->
+    <video id="videoPlayer" style="display: none;" preload="metadata" muted playsinline></video>
+    <canvas id="canvas" style="display: none;"></canvas>
+
+    <script>
+        const videoInput = document.getElementById('videoInput');
+        const fileNameDisplay = document.getElementById('fileName');
+        const extractButton = document.getElementById('extractButton');
+        const videoPlayer = document.getElementById('videoPlayer');
+        const canvas = document.getElementById('canvas');
+        const resultContainer = document.getElementById('resultContainer');
+        const previewImage = document.getElementById('previewImage');
+        const resolutionDisplay = document.getElementById('resolutionDisplay');
+        const downloadLink = document.getElementById('downloadLink');
+        const resetButton = document.getElementById('resetButton');
+
+        let selectedFile = null;
+
+        function resetUI() {
+            resultContainer.style.display = 'none';
+            fileNameDisplay.textContent = 'No file selected';
+            extractButton.classList.remove('active');
+            extractButton.textContent = 'Extract Frame';
+            videoInput.value = ''; // Clear the file input
+            selectedFile = null;
+        }
+
+        videoInput.addEventListener('change', (event) => {
+            selectedFile = event.target.files[0];
+            if (selectedFile) {
+                fileNameDisplay.textContent = selectedFile.name;
+                extractButton.classList.add('active');
+                resultContainer.style.display = 'none';
+            } else {
+                resetUI();
+            }
+        });
+
+        extractButton.addEventListener('click', () => {
+            if (!selectedFile) {
+                alert('Please select a video file first.');
+                return;
+            }
+
+            extractButton.textContent = 'Processing...';
+            extractButton.classList.remove('active');
+
+            const fileURL = URL.createObjectURL(selectedFile);
+            videoPlayer.src = fileURL;
+
+            const onSeeked = () => {
+                const ctx = canvas.getContext('2d');
+                
+                canvas.width = videoPlayer.videoWidth;
+                canvas.height = videoPlayer.videoHeight;
+                
+                ctx.drawImage(videoPlayer, 0, 0, canvas.width, canvas.height);
+                
+                const dataURL = canvas.toDataURL('image/png');
+                
+                previewImage.src = dataURL;
+                resolutionDisplay.textContent = `Detected Resolution: ${canvas.width} x ${canvas.height} px`;
+                
+                const originalFileName = selectedFile.name.split('.').slice(0, -1).join('.');
+                downloadLink.download = `${originalFileName}_last_frame.png`;
+                downloadLink.href = dataURL;
+
+                resultContainer.style.display = 'block';
+                extractButton.textContent = 'Extract Frame';
+                if(selectedFile) extractButton.classList.add('active');
+
+                URL.revokeObjectURL(fileURL);
+                
+                // Limpiar los listeners para evitar ejecuciones múltiples
+                videoPlayer.removeEventListener('seeked', onSeeked);
+                videoPlayer.removeEventListener('error', onError);
+            };
+
+            const onError = () => {
+                alert('Error loading the video. The format might not be supported by your browser.');
+                extractButton.textContent = 'Extract Frame';
+                if(selectedFile) extractButton.classList.add('active');
+                videoPlayer.removeEventListener('seeked', onSeeked);
+                videoPlayer.removeEventListener('error', onError);
+            };
+
+            videoPlayer.addEventListener('loadedmetadata', () => {
+                videoPlayer.currentTime = videoPlayer.duration;
+            });
+            
+            videoPlayer.addEventListener('seeked', onSeeked);
+            videoPlayer.addEventListener('error', onError);
+        });
+
+        resetButton.addEventListener('click', (e) => {
+            e.preventDefault(); // Evita que el enlace '#' navegue
+            resetUI();
+        });
+    </script>
+</body>
+</html>
